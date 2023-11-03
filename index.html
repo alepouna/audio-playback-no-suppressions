@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Microphone Input and Output</title>
+</head>
+<body>
+    <h1>Microphone Input and Output</h1>
+    <button onclick="populateOutputDevices()">Reload devices</button>
+    <select id="inputDevice" onchange="changeInputDevice()">
+        <!-- Dropdown for selecting the input device -->
+    </select>
+    <select id="outputDevice" onchange="changeOutputDevice()">
+        <!-- Dropdown for selecting the output device -->
+    </select>
+    <button id="startButton" onclick="startStreaming()">Start Streaming</button>
+    <button id="stopButton" onclick="stopStreaming()" disabled>Stop Streaming</button>
+
+    <script>
+        let audioInput, audioOutput;
+        let audioContext, audioDestination;
+
+        //request permission to use the microphone
+        navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+            // Microphone is available
+        })
+        .catch(error => {
+            // Microphone is unavailable
+            console.error('Error: ', error);
+        });
+
+        populateInputDevices();
+        populateOutputDevices();
+
+        startStreaming();
+
+
+        // Get a list of audio output devices
+        function populateOutputDevices() {
+            const outputDeviceSelector = document.getElementById('outputDevice');
+            navigator.mediaDevices.enumerateDevices()
+                .then(devices => {
+                    devices.forEach(device => {
+                        if (device.kind === 'audiooutput') {
+                            const option = document.createElement('option');
+                            option.value = device.deviceId;
+                            option.text = device.label || 'Unknown Device';
+                            outputDeviceSelector.appendChild(option);
+                        }
+                    });
+                });
+        }
+
+        async function populateInputDevices() {
+            const inputDeviceSelector = document.getElementById('inputDevice');
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            for (const device of devices) {
+                if (device.kind === 'audioinput') {
+                    const option = document.createElement('option');
+                    option.value = device.deviceId;
+                    option.text = device.label || 'Unknown Device';
+                    inputDeviceSelector.appendChild(option);
+                }
+            }
+        }
+
+        async function changeInputDevice() {
+            const inputDeviceId = document.getElementById('inputDevice').value;
+            if (audioInput) {
+                audioInput.getTracks().forEach(track => track.stop());
+            }
+            audioInput = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: inputDeviceId } });
+        }
+
+        // Function to change the output device
+        async function changeOutputDevice() {
+            const selectedDeviceId = document.getElementById('outputDevice').value;
+
+            if (audioOutput) {
+                audioOutput.setSinkId(selectedDeviceId)
+                    .then(() => {
+                        console.log(`Audio output device set to ${selectedDeviceId}`);
+                    })
+                    .catch(error => {
+                        console.error('Error setting output device:', error);
+                    });
+            }
+        }
+
+        // Function to start streaming microphone input
+        async function startStreaming() {
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                audioInput = await navigator.mediaDevices.getUserMedia({ audio: {
+                        echoCancellation: false,
+                        noiseSuppression: false,
+                        autoGainControl: false,
+                        sampleRate: 48000
+                    } 
+                });
+
+                //Ensure echo cancellation is off
+                audioInput.getAudioTracks()[0].applyConstraints({ echoCancellation: false });
+                
+
+                audioDestination = audioContext.createMediaStreamDestination();
+
+                audioOutput = new Audio();
+                audioOutput.srcObject = audioInput;
+                audioOutput.play();
+
+                document.getElementById('startButton').disabled = true;
+                document.getElementById('stopButton').disabled = false;
+            } catch (error) {
+                console.error('Error: ', error);
+            }
+        }
+
+        // Function to stop streaming
+        function stopStreaming() {
+            audioContext.close();
+            audioInput.getTracks().forEach(track => track.stop());
+            document.getElementById('startButton').disabled = false;
+            document.getElementById('stopButton').disabled = true;
+        }
+    </script>
+</body>
+</html>
